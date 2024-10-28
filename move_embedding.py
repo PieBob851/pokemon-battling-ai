@@ -87,7 +87,7 @@ class MoveEmbedding(nn.Module):
 Example Usage:
 
 move_info = {
-	"num": 71,
+    "num": 71,
     "accuracy": 100,
     "basePower": 20,
     "category": "Special",
