@@ -15,7 +15,7 @@ class Pokemon:
         self.ability = json["ability"]
         self.item = json["item"]
         self.moves = json["moves"]
-        
+
     def print_short_info(self):
         print(self.name)
         stat_names = ["hp", "atk", "def", "spa", "spd", "spe"]
@@ -34,15 +34,15 @@ class Team:
         self.actor = json_val["side"]["id"]
         self.name = json_val["side"]["name"]
         self.pokemon = [Pokemon(json_poke) for json_poke in json_val["side"]["pokemon"]]
-        
+
     def print_short_info(self):
         self.pokemon[0].print_short_info()
         print(f"{self.pokemon[1].name}, {self.pokemon[2].name}, {self.pokemon[3].name}, {self.pokemon[4].name}, {self.pokemon[5].name}")
-        
+
 class Actor:
     def __init__(self, team: Team):
         self.team = team
-    
+
     def pick_move(self, knowledge) -> str:
         raise NotImplementedError("Subclasses should implement this method.")
 
@@ -100,22 +100,22 @@ class Battler:
                 self.commands[output[1]](output)
 
         self.current_state = 'start'
-        
+
     def make_moves(self):
         if self.p1move:
             knowledge = {"field": None, "opponent":self.actor2.team, "error": self.error}
             move = f">p1 {self.actor1.pick_move(knowledge)}"
             self.send_command(move)
             self.p1move = False
-            
+
         if self.p2move:
             knowledge = {"field": None, "opponent":self.actor1.team, "error": self.error}
             move = f">p2 {self.actor2.pick_move(knowledge)}"
             self.send_command(move)
             self.p2move = False
-        
+
         self.receive_output()
-            
+
 
     #functions for commands
     def request(self, output):
@@ -128,7 +128,7 @@ class Battler:
 
     def turn(self, output):
         self.turn = output[2]
-        
+
     def on_move_error(self, output):
         self.error = True
         if output[2][23:27] == 'move' or output[2][23:27] == 'swit':
