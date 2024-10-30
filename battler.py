@@ -9,8 +9,8 @@ start_battle_path = "."
 class Pokemon:
     def __init__(self, json):
         self.name = json['details']
-        match = re.match(r"(\d+)/(\d+)", json["condition"])
-        self.stats = [int(match.group(2)), json["stats"]["atk"], json["stats"]["def"], json["stats"]["spa"], json["stats"]["spd"], json["stats"]["spe"]]
+        match = re.match(r'(\d+)(?:/(\d+))?', json["condition"])
+        self.stats = [match.group(2) if match.group(2) is not None else 0, json["stats"]["atk"], json["stats"]["def"], json["stats"]["spa"], json["stats"]["spd"], json["stats"]["spe"]]
         self.current_hp = match.group(1)
         self.ability = json["ability"]
         self.item = json["item"]
@@ -51,18 +51,20 @@ class Battler:
     states = {'start', 'sideupdate', 'p1', 'p2', 'update', 'end'}
 
     transitions = {
-        'start': {'sideupdate': 'sideupdate', 'await': 'await'},
-        'sideupdate': {'update': 'update', 'sideupdate': 'sideupdate', 'p1': 'p1', 'p2': 'p2', 'await': 'await'},
-        'p1': {'update': 'update', 'sideupdate': 'sideupdate', '': 'p1', 'await': 'await'},
-        'p2': {'update': 'update', 'sideupdate': 'sideupdate', '': 'p2', 'await': 'await'},
-        'update': {'update': 'update', 'sideupdate': 'sideupdate', '': 'update', 'await': 'await'},
+        'start': {'sideupdate': 'sideupdate', 'await': 'await', 'update': 'update', 'end':'end'},
+        'sideupdate': {'update': 'update', 'sideupdate': 'sideupdate', 'p1': 'p1', 'p2': 'p2', 'await': 'await', 'end':'end'},
+        'p1': {'update': 'update', 'sideupdate': 'sideupdate', '': 'p1', 'await': 'await', 'end':'end'},
+        'p2': {'update': 'update', 'sideupdate': 'sideupdate', '': 'p2', 'await': 'await', 'end':'end'},
+        'update': {'update': 'update', 'sideupdate': 'sideupdate', '': 'update', 'await': 'await', 'end':'end'},
+        'end': {'update': 'update', 'sideupdate': 'sideupdate', '': 'end', 'await': 'await', 'end':'end'}
     }
 
     def __init__(self, actor1: Actor, actor2: Actor):
         self.current_state = 'start'
         self.commands = {
             'request': self.request,
-            'turn': self.turn
+            'turn': self.turn,
+            'error': self.on_move_error
         }
 
         self.actor1 = actor1
@@ -87,10 +89,14 @@ class Battler:
         self.process.stdin.flush()
 
     def receive_output(self):
-        lines = []
+        self.error = False
         while self.current_state != 'await':
             output = self.process.stdout.readline().strip().split('|')
-            self.current_state = Battler.transitions[self.current_state][output[0]]
+            print(output)
+            if self.current_state != 'end':
+                self.current_state = Battler.transitions[self.current_state][output[0]]
+            else:
+                return
             if output[0] == '' and output[1] in self.commands:
                 self.commands[output[1]](output)
 
@@ -98,12 +104,16 @@ class Battler:
         
     def make_moves(self):
         if self.p1move:
-            knowledge = {"field": None, "opponent":self.actor2.team}
+            knowledge = {"field": None, "opponent":self.actor2.team, "error": self.error}
             move = f">p1 {self.actor1.pick_move(knowledge)}"
+            self.send_command(move)
+            self.p1move = False
             
         if self.p2move:
-            knowledge = {"field": None, "opponent":self.actor1.team}
-            move = f">p1 {self.actor2.pick_move(knowledge)}"
+            knowledge = {"field": None, "opponent":self.actor1.team, "error": self.error}
+            move = f">p2 {self.actor2.pick_move(knowledge)}"
+            self.send_command(move)
+            self.p2move = False
         
         self.receive_output()
             
@@ -119,3 +129,11 @@ class Battler:
 
     def turn(self, output):
         self.turn = output[2]
+        
+    def on_move_error(self, output):
+        self.error = True
+        if output[2][23:27] == 'move' or output[2][23:27] == 'swit':
+            if self.current_state == 'p1':
+                self.p1move = True
+            else:
+                self.p2move = True
