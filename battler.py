@@ -92,7 +92,6 @@ class Battler:
         self.error = False
         while self.current_state != 'await':
             output = self.process.stdout.readline().strip().split('|')
-            print(output)
             if self.current_state != 'end':
                 self.current_state = Battler.transitions[self.current_state][output[0]]
             else:
