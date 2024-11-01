@@ -1,31 +1,12 @@
 from battler import Actor, Team
-from model.ability_embedding import AbilityEmbedding
-from model.move_embedding import MoveEmbedding
+from model.custom_pokemon_model import CustomPokemonModel
 import torch
-import torch.nn as nn
-
-#
-EMBEDDING_DIM = 5
-HIDDEN_DIM = 64
-
 
 class ModelActor(Actor):
     def __init__(self, team: Team):
         super().__init__(team)
 
-        self.ability_embedding = AbilityEmbedding()
-        self.move_embedding = MoveEmbedding()
-
-        self.numerical_fc = nn.Linear(7 * 12, EMBEDDING_DIM)  # 7 stats for each pokemon on both teams
-
-        self.hidden_layer = nn.Sequential(
-            nn.Linear(EMBEDDING_DIM * (12 + 48 + 1), HIDDEN_DIM),
-            nn.ReLU(),
-            nn.Linear(HIDDEN_DIM, EMBEDDING_DIM)
-        )
-
-        self.action_fc = nn.Linear(EMBEDDING_DIM, 9)
-
+        self.custom_pokemon_model = CustomPokemonModel()
         self.prev_probs = None
         self.errors = 0
 
@@ -50,36 +31,7 @@ class ModelActor(Actor):
         # once we stop erroring we can reset the error index to 0
         self.errors = 0
 
-        abilities = [p.ability for p in self.team.pokemon] + [p.ability for p in knowledge['opponent'].pokemon]
-
-        moves = []
-        numerical_data = []
-
-        for p in self.team.pokemon:
-            moves += p.moves
-            numerical_data += p.stats
-            numerical_data.append(p.current_hp)
-
-        for p in knowledge['opponent'].pokemon:
-            moves += p.moves
-            numerical_data += p.stats
-            numerical_data.append(p.current_hp)
-
-        ability_embedding_output = torch.stack([self.ability_embedding(ability) for ability in abilities])
-        # 12 total abilities, 1 per pokemon
-        ability_embedding_output = ability_embedding_output.view(-1, 12 * EMBEDDING_DIM)
-
-        move_embedding_output = torch.stack([self.move_embedding(move) for move in moves])
-        # 12 pokemon * 4 moves each
-        move_embedding_output = move_embedding_output.view(-1, 48 * EMBEDDING_DIM)
-
-        numerical_fc_output = self.numerical_fc(torch.FloatTensor(numerical_data)).view(-1, EMBEDDING_DIM)
-
-        combined_input = torch.cat([ability_embedding_output, move_embedding_output, numerical_fc_output], dim=-1)
-        processed_features = self.hidden_layer(combined_input)
-
-        action_logits = self.action_fc(processed_features)
-        action_probs = nn.Softmax(dim=-1)(action_logits)
+        action_probs = self.custom_pokemon_model.forward(self.team, knowledge['opponent'])
 
         # The output is 9 numbers which we're taking to represent the probability of choosing an action
         # indices 0-3 represent moves 1-4 of the active pokemon
