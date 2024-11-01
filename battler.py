@@ -6,15 +6,19 @@ import re
 
 start_battle_path = "."
 
+
 class Pokemon:
     def __init__(self, json):
         self.name = json['details']
         match = re.match(r'(\d+)(?:/(\d+))?', json["condition"])
-        self.stats = [match.group(2) if match.group(2) is not None else 0, json["stats"]["atk"], json["stats"]["def"], json["stats"]["spa"], json["stats"]["spd"], json["stats"]["spe"]]
-        self.current_hp = match.group(1)
+        self.stats = [int(match.group(2)) if match.group(2) is not None else 0, json["stats"]["atk"],
+                      json["stats"]["def"], json["stats"]["spa"], json["stats"]["spd"], json["stats"]["spe"]]
+        self.current_hp = int(match.group(1))
         self.ability = json["ability"]
         self.item = json["item"]
         self.moves = json["moves"]
+        if len(self.moves) < 4:
+            self.moves += ['emptymove'] * (4 - len(self.moves))
 
     def print_short_info(self):
         print(self.name)
@@ -28,6 +32,7 @@ class Pokemon:
         for move in self.moves:
             print(f"    {move}")
 
+
 class Team:
     def __init__(self, json_val=None):
         "Initialize team from json provided by Showdown"
@@ -37,7 +42,9 @@ class Team:
 
     def print_short_info(self):
         self.pokemon[0].print_short_info()
-        print(f"{self.pokemon[1].name}, {self.pokemon[2].name}, {self.pokemon[3].name}, {self.pokemon[4].name}, {self.pokemon[5].name}")
+        print(
+            f"{self.pokemon[1].name}, {self.pokemon[2].name}, {self.pokemon[3].name}, {self.pokemon[4].name}, {self.pokemon[5].name}")
+
 
 class Actor:
     def __init__(self, team: Team):
@@ -46,17 +53,18 @@ class Actor:
     def pick_move(self, knowledge) -> str:
         raise NotImplementedError("Subclasses should implement this method.")
 
+
 class Battler:
-    #DFA which handles text output
+    # DFA which handles text output
     states = {'start', 'sideupdate', 'p1', 'p2', 'update', 'end'}
 
     transitions = {
-        'start': {'sideupdate': 'sideupdate', 'await': 'await', 'update': 'update', 'end':'end'},
-        'sideupdate': {'update': 'update', 'sideupdate': 'sideupdate', 'p1': 'p1', 'p2': 'p2', 'await': 'await', 'end':'end'},
-        'p1': {'update': 'update', 'sideupdate': 'sideupdate', '': 'p1', 'await': 'await', 'end':'end'},
-        'p2': {'update': 'update', 'sideupdate': 'sideupdate', '': 'p2', 'await': 'await', 'end':'end'},
-        'update': {'update': 'update', 'sideupdate': 'sideupdate', '': 'update', 'await': 'await', 'end':'end'},
-        'end': {'update': 'update', 'sideupdate': 'sideupdate', '': 'end', 'await': 'await', 'end':'end'}
+        'start': {'sideupdate': 'sideupdate', 'await': 'await', 'update': 'update', 'end': 'end'},
+        'sideupdate': {'update': 'update', 'sideupdate': 'sideupdate', 'p1': 'p1', 'p2': 'p2', 'await': 'await', 'end': 'end'},
+        'p1': {'update': 'update', 'sideupdate': 'sideupdate', '': 'p1', 'await': 'await', 'end': 'end'},
+        'p2': {'update': 'update', 'sideupdate': 'sideupdate', '': 'p2', 'await': 'await', 'end': 'end'},
+        'update': {'update': 'update', 'sideupdate': 'sideupdate', '': 'update', 'await': 'await', 'end': 'end'},
+        'end': {'update': 'update', 'sideupdate': 'sideupdate', '': 'end', 'await': 'await', 'end': 'end'}
     }
 
     def __init__(self, actor1: Actor, actor2: Actor):
@@ -103,21 +111,23 @@ class Battler:
 
     def make_moves(self):
         if self.p1move:
-            knowledge = {"field": None, "opponent":self.actor2.team, "error": self.error}
+            knowledge = {"field": None, "opponent": self.actor2.team, "error": self.error}
             move = f">p1 {self.actor1.pick_move(knowledge)}"
+            # print(move)
             self.send_command(move)
             self.p1move = False
 
         if self.p2move:
-            knowledge = {"field": None, "opponent":self.actor1.team, "error": self.error}
+            knowledge = {"field": None, "opponent": self.actor1.team, "error": self.error}
             move = f">p2 {self.actor2.pick_move(knowledge)}"
+            # print(move)
             self.send_command(move)
             self.p2move = False
 
         self.receive_output()
 
+    # functions for commands
 
-    #functions for commands
     def request(self, output):
         if self.current_state == 'p1':
             self.actor1.team = Team(json.loads(output[2]))
