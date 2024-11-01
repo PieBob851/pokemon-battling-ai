@@ -25,6 +25,8 @@ class RandomActor(Actor):
         return random.choice(possible_actions)
 
 
+score = {'BOT_1': 0, 'BOT_2': 0}
+
 for i in range(100):
     actor1 = ModelActor(None)
     actor2 = RandomActor(None)
@@ -36,4 +38,7 @@ for i in range(100):
         battler.make_moves()
         # print("iteration:", iteration, battler.current_state)
         iteration += 1
+    score[battler.winner] += 1
     print(f'Game {i} finished')
+
+print(score)
