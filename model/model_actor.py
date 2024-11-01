@@ -44,7 +44,7 @@ class ModelActor(Actor):
             choice = self.prev_probs[self.errors % 9]
 
             if choice < 4:
-                return f'move {choice}'
+                return f'move {choice + 1}'
             else:
                 return f'switch {choice - 2}'
         # once we stop erroring we can reset the error index to 0
@@ -93,6 +93,6 @@ class ModelActor(Actor):
         self.prev_probs = choices
 
         if choice < 4:
-            return f'move {choice}'
+            return f'move {choice + 1}'
         else:
             return f'switch {choice - 2}'

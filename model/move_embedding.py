@@ -10,7 +10,7 @@ MOVE_NAME_TO_NUM = dict(zip(moves_df['name'], moves_df['num']))
 # Note that there are 901 total moves in MOVE_NAME_TO_NUM dictionary. However, the identifers 'num' do NOT
 # range from 0 to 900 as some are missing. Therefore, vocab_size will be slightly higher than actual number
 # of possible moves to allow lookup without out of index error in the Embedding.
-VOCAB_SIZE = max(MOVE_NAME_TO_NUM.values())
+VOCAB_SIZE = max(MOVE_NAME_TO_NUM.values()) + 1
 EMBEDDING_DIM = 5
 
 

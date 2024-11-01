@@ -17,6 +17,8 @@ class Pokemon:
         self.ability = json["ability"]
         self.item = json["item"]
         self.moves = json["moves"]
+        if len(self.moves) < 4:
+            self.moves += ['emptymove'] * (4 - len(self.moves))
 
     def print_short_info(self):
         print(self.name)
