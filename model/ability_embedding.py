@@ -10,7 +10,7 @@ ABILITY_NAME_TO_NUM = dict(zip(ability_df['name'], ability_df['num']))
 # Note that there are 306 total abilities in ABILITY_NAME_TO_NUM dictionary. However, the identifers 'num' do NOT
 # range from 0 to 305 as some are missing. Therefore, vocab_size will be slightly higher than actual number
 # of possible abilities to allow lookup without out of index error in the Embedding.
-VOCAB_SIZE = max(ABILITY_NAME_TO_NUM.values())
+VOCAB_SIZE = max(ABILITY_NAME_TO_NUM.values()) + 1
 EMBEDDING_DIM = 5
 
 
