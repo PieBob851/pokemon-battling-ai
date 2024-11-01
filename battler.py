@@ -72,7 +72,8 @@ class Battler:
         self.commands = {
             'request': self.request,
             'turn': self.turn,
-            'error': self.on_move_error
+            'error': self.on_move_error,
+            'win': self.on_win
         }
 
         self.actor1 = actor1
@@ -89,6 +90,8 @@ class Battler:
             text=True,
             bufsize=1
         )
+
+        self.winner = None
 
         self.send_command('>start {"formatid":"gen9randombattle", "p1": {"name":"BOT_1"}, "p2": {"name":"BOT_2"}}')
 
@@ -146,3 +149,6 @@ class Battler:
                 self.p1move = True
             else:
                 self.p2move = True
+
+    def on_win(self, output):
+        self.winner = output[2]
