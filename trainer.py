@@ -30,7 +30,7 @@ def train(model_actor, random_actor, gamma, epsilon, epsilon_decay, min_epsilon,
                 # In the beginning, model actor is essentially picking random moves. Over time, it uses its learned
                 # strategy more and more as epsilon decays. 
                 if random.random() < epsilon:
-                    move = random.choice(possible_actions)
+                    move = f">p1 {random.choice(possible_actions)}"
                 else:
                     move = f">p1 {battler.actor1.pick_move(knowledge)}"
                 # print(move)
