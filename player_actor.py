@@ -1,6 +1,5 @@
-from battler import Pokemon, Team, Actor, Battler
+from battler import Team, Actor
 import random
-from model.model_actor import ModelActor
 
 possible_actions = [f"move {i}" for i in range(1, 5)] + [f"switch {i}" for i in range(2, 7)]
 
@@ -23,22 +22,3 @@ class RandomActor(Actor):
 
     def pick_move(self, knowledge) -> str:
         return random.choice(possible_actions)
-
-
-score = {'BOT_1': 0, 'BOT_2': 0}
-
-for i in range(100):
-    actor1 = ModelActor(None)
-    actor2 = RandomActor(None)
-
-    battler = Battler(actor1, actor2)
-
-    iteration = 0
-    while battler.current_state != 'end':
-        battler.make_moves()
-        # print("iteration:", iteration, battler.current_state)
-        iteration += 1
-    score[battler.winner] += 1
-    print(f'Game {i} finished')
-
-print(score)

@@ -11,11 +11,9 @@ MOVE_NAME_TO_NUM = dict(zip(moves_df['name'], moves_df['num']))
 # range from 0 to 900 as some are missing. Therefore, vocab_size will be slightly higher than actual number
 # of possible moves to allow lookup without out of index error in the Embedding.
 VOCAB_SIZE = max(MOVE_NAME_TO_NUM.values()) + 1
-EMBEDDING_DIM = 5
-
 
 class MoveEmbedding(nn.Module):
-    def __init__(self, vocab_size=VOCAB_SIZE, embedding_dim=EMBEDDING_DIM):
+    def __init__(self, embedding_dim, vocab_size=VOCAB_SIZE):
         super().__init__()
         self.move_embed = nn.Embedding(vocab_size, embedding_dim)
 
