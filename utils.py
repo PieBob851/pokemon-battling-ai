@@ -2,13 +2,10 @@ from battler import Battler
 from model.model_actor import ModelActor
 from player_actor import RandomActor
 
-def simulate_games(n=100):
+def simulate_games(actor1, actor2, n=100):
     score = {'BOT_1': 0, 'BOT_2': 0}
 
     for i in range(n):
-        actor1 = ModelActor(None)
-        actor2 = RandomActor(None)
-
         battler = Battler(actor1, actor2)
 
         iteration = 0
@@ -20,5 +17,7 @@ def simulate_games(n=100):
         print(f'Game {i} finished')
 
     print(score)
+    print(f"Win rate for BOT_1: {(score['BOT_1'] / n * 100):.2f}")
+    print(f"Win rate for BOT_2: {(score['BOT_2'] / n * 100):.2f}")
 
-simulate_games(10)
+# simulate_games(ModelActor(None), RandomActor(None), 10)
