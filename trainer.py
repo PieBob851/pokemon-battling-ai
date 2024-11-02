@@ -12,18 +12,18 @@ def train(model_actor, random_actor, gamma, epsilon, epsilon_decay, min_epsilon,
     # Training Loop
     for episode in range(num_episodes):
         battler = Battler(model_actor, random_actor)
-        battler.make_moves()
+        battler.make_moves() # Initial game setup hack so p1move and p2move are not both False
+
+        avg_loss = 0
+        iterations = 0
 
         while battler.current_state != 'end':
             original_total_hp_actor_1 = battler.actor1.team.calculate_total_HP()
             original_total_hp_actor_2 = battler.actor2.team.calculate_total_HP()
-            # print(battler.p1move)
-            # print(battler.p2move)
 
             action_probs = model_actor.custom_pokemon_model.forward(battler.actor1.team, battler.actor2.team)
             current_q_value = action_probs.max()
             
-            # battler.make_moves()
             if battler.p1move:
                 knowledge = {"field": None, "opponent": battler.actor2.team, "error": battler.error}
                 # Epsilon-greedy policy for exploration
@@ -58,15 +58,18 @@ def train(model_actor, random_actor, gamma, epsilon, epsilon_decay, min_epsilon,
             
             # TODO: currently using MSE loss but we should probably refine this
             loss = (current_q_value - target_q_value) ** 2
+            avg_loss += loss
 
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+
+            iterations += 1
         
         epsilon = max(min_epsilon, epsilon * epsilon_decay) # Decay epsilon
         if episode % 10 == 0:
             print(f"Episode {episode}, Epsilon {epsilon:.3f}")
-            print(f'Game {episode} finished')
+            print(f"Game {episode} finished with avg. loss of {avg_loss / iterations}")
         
         score[battler.winner] += 1
 
