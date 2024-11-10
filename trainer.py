@@ -8,21 +8,18 @@ import torch.optim as optim
 def train(model_actor, random_actor, gamma, num_episodes, optimizer):
     score = {'BOT_1': 0, 'BOT_2': 0}
     
-    ############## Implementing Policy Gradients (REINFORCE ALGORITHM) as decribed below ##############
-    # https://towardsdatascience.com/reinforcement-learning-explained-visually-part-6-policy-gradients-step-by-step-f9f448e73754
+    ############## Implementing Policy Gradients (REINFORCE ALGORITHM) below ##############
 
     # Training Loop
     for episode in range(num_episodes):
         battler = Battler(model_actor, random_actor)
         battler.make_moves() # Initial game setup hack so p1move and p2move are not both False
 
-        training_samples = [] # store all game states and moves experienced by model in a single episode / battle
+        training_samples = [] # store relevant metadata from a single episode / battle
 
         ############## PLAY AN ENTIRE EPISODE / BATTLE AND RECORD EACH INTERACTION ##############
         while battler.current_state != 'end':
-            model_team = None # model's team in current game state
-            opponent_team = None # opponent's team in current game state
-            model_move = None # action chosen by model in current game state
+            prob_action = None # probability of action chosen by model in current game state
             reward = None # reward received after executing actions in current game state
 
             original_total_hp_actor_1 = model_actor.team.calculate_total_HP()
@@ -30,16 +27,28 @@ def train(model_actor, random_actor, gamma, num_episodes, optimizer):
             
             if battler.p1move:
                 knowledge = {"field": None, "opponent": battler.actor2.team, "error": battler.error}
-                model_team = model_actor.team
-                model_move = model_actor.pick_move(knowledge)
-                move = f">p1 {model_move}"
+                action = model_actor.pick_move(knowledge)
+
+                action_type, action_num = action.split(" ")
+                action_index = None
+                if (action_type == "move"):
+                    action_index = int(action_num) - 1
+                else:
+                    action_index = int(action_num) + 2
+
+                prob_action = model_actor.prev_probs[0][action_index]
+                # Earlier, I noticed that model's prev_probs is NAN during some runs (model updating weights in strange ways perhaps?)
+                # Anyway, this issue appears to be mitigated for now, but leaving this check here for the future!
+                if (torch.isnan(model_actor.prev_probs).any()):
+                    print("Model's prev_probs contains NAN values")
+
+                move = f">p1 {action}"
                 # print(move)
                 battler.send_command(move)
                 battler.p1move = False
 
             if battler.p2move:
                 knowledge = {"field": None, "opponent": model_actor.team, "error": battler.error}
-                opponent_team = battler.actor2.team
                 move = f">p2 {battler.actor2.pick_move(knowledge)}"
                 # print(move)
                 battler.send_command(move)
@@ -47,7 +56,7 @@ def train(model_actor, random_actor, gamma, num_episodes, optimizer):
             
             battler.receive_output()
 
-            # TODO: Improve reward calculation
+            # TODO: Improve reward heuristic
             # Calculate reward based on damage exchanged (considering full teams in case a switch move occurred)
             damage_dealt = battler.actor2.team.calculate_total_HP() - original_total_hp_actor_2
             damage_recieved = model_actor.team.calculate_total_HP() - original_total_hp_actor_1
@@ -55,17 +64,16 @@ def train(model_actor, random_actor, gamma, num_episodes, optimizer):
             # print(reward)
             
             # Save each sample of observed experience as training data
-            state = (model_team, opponent_team)
-            training_samples.append((state, model_move, reward))
+            training_samples.append((prob_action, reward))
         
         ############## USE PREVIOUS BATTLE EXPERIENCES TO TUNE NETWORK WEIGHTS ##############
         
         # Compute discounted returns using gamma
-        # TODO: Cross-check discounted returns formula since it directly impacts loss calculation. Normalize?
+        # TODO: Cross-check discounted returns formula since it directly impacts loss calculation. Normalize rewards?
         discounted_returns = []
         discounted_reward = 0
         for sample in training_samples[::-1]:
-            _, _, reward = sample
+            _, reward = sample
             discounted_reward = reward + discounted_reward * gamma
             discounted_returns.append(discounted_reward)
         discounted_returns = discounted_returns[::-1]
@@ -74,32 +82,19 @@ def train(model_actor, random_actor, gamma, num_episodes, optimizer):
         invalid_samples = 0
 
         for i, sample in enumerate(training_samples):
-            state, action, _ = sample
+            prob_action, _ = sample
             current_discounted_return = discounted_returns[i]
-            team, opponent = state
-            # TODO: Can we somehow reduce # of invalid samples generated during battle? 
-            # Maybe we can just store prob_action directly instead of storing team/opponent/action information
-            if (team is None or opponent is None or action is None):
+            # TODO: Can we somehow reduce # of invalid samples generated during battle?
+            # prob_action is None when it is not p1's move so maybe it is okay to ignore these cases? 
+            # It is interesting that this number fluctuates greatly though!
+            if (prob_action is None):
                 invalid_samples += 1
                 continue
 
-            model_actor.team = team
-            knowledge = {"field": None, "opponent": opponent, "error": None}
-            model_actor.pick_move(knowledge)
-
-            action_type, action_num = action.split(" ")
-            action_index = None
-            if (action_type == "move"):
-                action_index = int(action_num) - 1
-            else:
-                action_index = int(action_num) + 2
-
-            prob_action = model_actor.prev_probs[0][action_index]
-            # prev_probs is NAN during some runs causing prob_action to be 0 / NAN.
-            # A little debugging shows that model is probably updating weights in strange ways,
-            # so we might need to refine the back prop step. Hacky fix for now is to add 1e-10 to prob_action.
+            # Important Observations: 
+            # (1) High loss values could mean prob_action is close to 0 often (poor model convergence?)
+            # (2) Hacky fix for now is to add 1e-10 to prob_action to avoid taking log of 0.
             loss = -torch.log(prob_action + 1e-10) * current_discounted_return
-            # print(model_actor.prev_probs)
 
             total_loss += loss # negative loss values are due to negative rewards
 
