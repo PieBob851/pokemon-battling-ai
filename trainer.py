@@ -2,43 +2,46 @@ from battler import Battler
 from model.model_actor import ModelActor
 from player_actor import RandomActor
 from utils import simulate_games
-import random
+import torch
 import torch.optim as optim
 
-def train(model_actor, random_actor, gamma, epsilon, epsilon_decay, min_epsilon, num_episodes, optimizer):
+def train(model_actor, random_actor, gamma, num_episodes, optimizer):
     score = {'BOT_1': 0, 'BOT_2': 0}
-    possible_actions = [f"move {i}" for i in range(1, 5)] + [f"switch {i}" for i in range(2, 7)]
     
+    ############## Implementing Policy Gradients as decribed below ##############
+    # https://towardsdatascience.com/reinforcement-learning-explained-visually-part-6-policy-gradients-step-by-step-f9f448e73754
+
     # Training Loop
     for episode in range(num_episodes):
         battler = Battler(model_actor, random_actor)
         battler.make_moves() # Initial game setup hack so p1move and p2move are not both False
 
-        avg_loss = 0
-        iterations = 0
+        gamma_factor = 1
+        total_discounted_reward = 0
+        training_samples = [] # store all game states and moves experienced by model in a single episode / battle
 
+        ############## PLAY AN ENTIRE EPISODE / BATTLE AND RECORD EACH INTERACTION ##############
         while battler.current_state != 'end':
-            original_total_hp_actor_1 = battler.actor1.team.calculate_total_HP()
-            original_total_hp_actor_2 = battler.actor2.team.calculate_total_HP()
+            model_team = None # model's team in current game state
+            opponent_team = None # opponent's team in current game state
+            model_move = None # action chosen by model in current game state
+            discounted_reward = None # reward received after executing actions in current game state
 
-            action_probs = model_actor.custom_pokemon_model.forward(battler.actor1.team, battler.actor2.team)
-            current_q_value = action_probs.max()
+            original_total_hp_actor_1 = model_actor.team.calculate_total_HP()
+            original_total_hp_actor_2 = battler.actor2.team.calculate_total_HP()
             
             if battler.p1move:
                 knowledge = {"field": None, "opponent": battler.actor2.team, "error": battler.error}
-                # Epsilon-greedy policy for exploration
-                # In the beginning, model actor is essentially picking random moves. Over time, it uses its learned
-                # strategy more and more as epsilon decays. 
-                if random.random() < epsilon:
-                    move = f">p1 {random.choice(possible_actions)}"
-                else:
-                    move = f">p1 {battler.actor1.pick_move(knowledge)}"
+                model_team = model_actor.team
+                model_move = model_actor.pick_move(knowledge)
+                move = f">p1 {model_move}"
                 # print(move)
                 battler.send_command(move)
                 battler.p1move = False
 
             if battler.p2move:
-                knowledge = {"field": None, "opponent": battler.actor1.team, "error": battler.error}
+                knowledge = {"field": None, "opponent": model_actor.team, "error": battler.error}
+                opponent_team = battler.actor2.team
                 move = f">p2 {battler.actor2.pick_move(knowledge)}"
                 # print(move)
                 battler.send_command(move)
@@ -48,28 +51,63 @@ def train(model_actor, random_actor, gamma, epsilon, epsilon_decay, min_epsilon,
 
             # Calculate reward based on damage exchanged (considering full teams in case a switch move occurred)
             damage_dealt = battler.actor2.team.calculate_total_HP() - original_total_hp_actor_2
-            damage_recieved = battler.actor1.team.calculate_total_HP() - original_total_hp_actor_1
-            reward = damage_dealt - damage_recieved
-            # print(reward)
+            damage_recieved = model_actor.team.calculate_total_HP() - original_total_hp_actor_1
+            discounted_reward = damage_dealt - damage_recieved
+            discounted_reward *= gamma_factor
 
-            next_probs = model_actor.custom_pokemon_model.forward(battler.actor1.team, battler.actor2.team)
-            # TODO: figure out better / more robust way to calculate Q value instead of relying on action probs only
-            target_q_value = reward + (gamma * next_probs.max().detach())
+            total_discounted_reward += discounted_reward
+            gamma_factor *= gamma
+            # print(discounted_reward)
             
-            # TODO: currently using MSE loss but we should probably refine this
-            loss = (current_q_value - target_q_value) ** 2
-            avg_loss += loss
-
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-
-            iterations += 1
+            # Save each sample of observed experience as training data
+            state = (model_team, opponent_team)
+            training_samples.append((state, model_move, discounted_reward))
         
-        epsilon = max(min_epsilon, epsilon * epsilon_decay) # Decay epsilon
+        ############## USE PREVIOUS BATTLE EXPERIENCES TO TUNE NETWORK WEIGHTS ##############
+        total_loss = 0
+        invalid_samples = 0
+
+        for sample in training_samples:
+            state, action, reward = sample
+            team, opponent = state
+            if (team is None or opponent is None or action is None):
+                invalid_samples += 1
+                total_discounted_reward -= reward
+                continue
+
+            model_actor.team = team
+            knowledge = {"field": None, "opponent": opponent, "error": None}
+            model_actor.pick_move(knowledge)
+
+            action_type, action_num = action.split(" ")
+            action_index = None
+            if (action_type == "move"):
+                action_index = int(action_num) - 1
+            else:
+                action_index = int(action_num) + 2
+
+            prob_action = model_actor.prev_probs[0][action_index]
+            if (prob_action > 0):
+                loss = -torch.log(prob_action) * total_discounted_reward
+            else: 
+                # prev_probs is nan during some runs causing prob_action to be 0 / nan
+                # a little debugging shows that model is probably updating weights in strange ways
+                # so we need to refine the back prop step.
+                print(model_actor.prev_probs)
+                loss = 0
+            total_loss += loss
+            total_discounted_reward -= reward
+
+        # The check below is done as sometimes: 
+        # (1) training samples are too few and all of them are invalid, OR
+        # (2) losses are 0 due to prev_probs being nan (see else block above)
+        if (total_loss != 0):
+            total_loss.backward()
+            optimizer.step()
+            optimizer.zero_grad()
+
         if episode % 10 == 0:
-            print(f"Episode {episode}, Epsilon {epsilon:.3f}")
-            print(f"Game {episode} finished with avg. loss of {avg_loss / iterations}")
+            print(f"Game {episode} finished with total loss = {total_loss}, % of invalid samples = {(invalid_samples / len(training_samples) * 100):.2f}")
         
         score[battler.winner] += 1
 
@@ -83,16 +121,13 @@ def train(model_actor, random_actor, gamma, epsilon, epsilon_decay, min_epsilon,
 # Hyperparameters
 learning_rate = 0.001
 gamma = 0.99
-epsilon = 1.0
-epsilon_decay = 0.99
-min_epsilon = 0.01
 num_episodes = 100
 
 model_actor = ModelActor(None)
 random_actor = RandomActor(None)
 optimizer = optim.Adam(model_actor.custom_pokemon_model.parameters(), lr=learning_rate)
 
-train(model_actor, random_actor, gamma, epsilon, epsilon_decay, min_epsilon, num_episodes, optimizer)
+train(model_actor, random_actor, gamma, num_episodes, optimizer)
 
 ############## Validation ##############
 

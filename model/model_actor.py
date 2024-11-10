@@ -8,6 +8,7 @@ class ModelActor(Actor):
 
         self.custom_pokemon_model = CustomPokemonModel()
         self.prev_probs = None
+        self.prev_probs_sorted = None
         self.errors = 0
 
     def pick_move(self, knowledge) -> str:
@@ -22,7 +23,7 @@ class ModelActor(Actor):
             self.errors += 1
             # using % 9 is a very hacky fix that needs to be removed.
             # self.errors should never exceed 8 if we handle the errors described above
-            choice = self.prev_probs[self.errors % 9]
+            choice = self.prev_probs_sorted[self.errors % 9]
 
             if choice < 4:
                 return f'move {choice + 1}'
@@ -42,7 +43,8 @@ class ModelActor(Actor):
         # prev_probs[0] is the highest prob choice
         choice = choices[0]
         # we store the entire distribution of probs in prev_probs, so that on error we can try again with the next best choice
-        self.prev_probs = choices
+        self.prev_probs_sorted = choices
+        self.prev_probs = action_probs
 
         if choice < 4:
             return f'move {choice + 1}'

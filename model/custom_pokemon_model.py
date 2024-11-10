@@ -3,7 +3,7 @@ from model.move_embedding import MoveEmbedding
 import torch
 import torch.nn as nn
 
-EMBEDDING_DIM = 5
+EMBEDDING_DIM = 128
 HIDDEN_DIM = 64
 
 class CustomPokemonModel(nn.Module):

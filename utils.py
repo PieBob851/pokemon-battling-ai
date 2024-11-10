@@ -14,10 +14,11 @@ def simulate_games(actor1, actor2, n=100):
             # print("iteration:", iteration, battler.current_state)
             iteration += 1
         score[battler.winner] += 1
-        print(f'Game {i} finished')
+        if (i % 10 == 0):
+            print(f'Game {i} finished')
 
     print(score)
     print(f"Win rate for BOT_1: {(score['BOT_1'] / n * 100):.2f}")
     print(f"Win rate for BOT_2: {(score['BOT_2'] / n * 100):.2f}")
 
-# simulate_games(ModelActor(None), RandomActor(None), 10)
+# simulate_games(ModelActor(None), RandomActor(None), 100)
