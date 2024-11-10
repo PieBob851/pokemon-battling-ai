@@ -8,7 +8,7 @@ import torch.optim as optim
 def train(model_actor, random_actor, gamma, num_episodes, optimizer):
     score = {'BOT_1': 0, 'BOT_2': 0}
     
-    ############## Implementing Policy Gradients as decribed below ##############
+    ############## Implementing Policy Gradients (REINFORCE ALGORITHM) as decribed below ##############
     # https://towardsdatascience.com/reinforcement-learning-explained-visually-part-6-policy-gradients-step-by-step-f9f448e73754
 
     # Training Loop
@@ -49,10 +49,11 @@ def train(model_actor, random_actor, gamma, num_episodes, optimizer):
             
             battler.receive_output()
 
+            # TODO: Improve reward calculation
             # Calculate reward based on damage exchanged (considering full teams in case a switch move occurred)
             damage_dealt = battler.actor2.team.calculate_total_HP() - original_total_hp_actor_2
             damage_recieved = model_actor.team.calculate_total_HP() - original_total_hp_actor_1
-            discounted_reward = damage_dealt - damage_recieved
+            discounted_reward = 5 # previously, damage_dealt - damage_recieved
             discounted_reward *= gamma_factor
 
             total_discounted_reward += discounted_reward
@@ -70,7 +71,7 @@ def train(model_actor, random_actor, gamma, num_episodes, optimizer):
         for sample in training_samples:
             state, action, reward = sample
             team, opponent = state
-            # Can we somehow reduce # of invalid samples generated during battle? 
+            # TODO: Can we somehow reduce # of invalid samples generated during battle? 
             if (team is None or opponent is None or action is None):
                 invalid_samples += 1
                 total_discounted_reward -= reward
@@ -88,20 +89,17 @@ def train(model_actor, random_actor, gamma, num_episodes, optimizer):
                 action_index = int(action_num) + 2
 
             prob_action = model_actor.prev_probs[0][action_index]
-            if (prob_action > 0):
-                loss = -torch.log(prob_action) * total_discounted_reward
-            else: 
-                # prev_probs is nan during some runs causing prob_action to be 0 / nan
-                # a little debugging shows that model is probably updating weights in strange ways
-                # so we need to refine the back prop step.
-                print(model_actor.prev_probs)
-                loss = 0
-            total_loss += loss
+            # prev_probs is NAN during some runs causing prob_action to be 0 / NAN.
+            # A little debugging shows that model is probably updating weights in strange ways,
+            # so we might need to refine the back prop step. Hacky fix for now is to add 1e-10 to prob_action.
+            loss = -torch.log(prob_action + 1e-10) * total_discounted_reward
+            # print(model_actor.prev_probs)
+
+            total_loss += loss # negative loss values are due to negative rewards
+            # TODO: Cross-check discounted reward formula since it directly impacts loss calculation.
             total_discounted_reward -= reward
 
-        # The check below is done as sometimes: 
-        # (1) training samples are too few and all of them are invalid, OR
-        # (2) losses are 0 due to prev_probs being nan (see else block above)
+        # This check is done as sometimes training samples are too few / invalid causing total_loss to be 0
         if (total_loss != 0):
             total_loss.backward()
             optimizer.step()
