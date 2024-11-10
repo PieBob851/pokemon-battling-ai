@@ -70,6 +70,7 @@ def train(model_actor, random_actor, gamma, num_episodes, optimizer):
         for sample in training_samples:
             state, action, reward = sample
             team, opponent = state
+            # Can we somehow reduce # of invalid samples generated during battle? 
             if (team is None or opponent is None or action is None):
                 invalid_samples += 1
                 total_discounted_reward -= reward
