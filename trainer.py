@@ -16,8 +16,6 @@ def train(model_actor, random_actor, gamma, num_episodes, optimizer):
         battler = Battler(model_actor, random_actor)
         battler.make_moves() # Initial game setup hack so p1move and p2move are not both False
 
-        gamma_factor = 1
-        total_discounted_reward = 0
         training_samples = [] # store all game states and moves experienced by model in a single episode / battle
 
         ############## PLAY AN ENTIRE EPISODE / BATTLE AND RECORD EACH INTERACTION ##############
@@ -25,7 +23,7 @@ def train(model_actor, random_actor, gamma, num_episodes, optimizer):
             model_team = None # model's team in current game state
             opponent_team = None # opponent's team in current game state
             model_move = None # action chosen by model in current game state
-            discounted_reward = None # reward received after executing actions in current game state
+            reward = None # reward received after executing actions in current game state
 
             original_total_hp_actor_1 = model_actor.team.calculate_total_HP()
             original_total_hp_actor_2 = battler.actor2.team.calculate_total_HP()
@@ -53,28 +51,36 @@ def train(model_actor, random_actor, gamma, num_episodes, optimizer):
             # Calculate reward based on damage exchanged (considering full teams in case a switch move occurred)
             damage_dealt = battler.actor2.team.calculate_total_HP() - original_total_hp_actor_2
             damage_recieved = model_actor.team.calculate_total_HP() - original_total_hp_actor_1
-            discounted_reward = 5 # previously, damage_dealt - damage_recieved
-            discounted_reward *= gamma_factor
-
-            total_discounted_reward += discounted_reward
-            gamma_factor *= gamma
-            # print(discounted_reward)
+            reward = max(0.1, damage_dealt - damage_recieved)
+            # print(reward)
             
             # Save each sample of observed experience as training data
             state = (model_team, opponent_team)
-            training_samples.append((state, model_move, discounted_reward))
+            training_samples.append((state, model_move, reward))
         
         ############## USE PREVIOUS BATTLE EXPERIENCES TO TUNE NETWORK WEIGHTS ##############
+        
+        # Compute discounted returns using gamma
+        # TODO: Cross-check discounted returns formula since it directly impacts loss calculation. Normalize?
+        discounted_returns = []
+        discounted_reward = 0
+        for sample in training_samples[::-1]:
+            _, _, reward = sample
+            discounted_reward = reward + discounted_reward * gamma
+            discounted_returns.append(discounted_reward)
+        discounted_returns = discounted_returns[::-1]
+
         total_loss = 0
         invalid_samples = 0
 
-        for sample in training_samples:
-            state, action, reward = sample
+        for i, sample in enumerate(training_samples):
+            state, action, _ = sample
+            current_discounted_return = discounted_returns[i]
             team, opponent = state
             # TODO: Can we somehow reduce # of invalid samples generated during battle? 
+            # Maybe we can just store prob_action directly instead of storing team/opponent/action information
             if (team is None or opponent is None or action is None):
                 invalid_samples += 1
-                total_discounted_reward -= reward
                 continue
 
             model_actor.team = team
@@ -92,21 +98,19 @@ def train(model_actor, random_actor, gamma, num_episodes, optimizer):
             # prev_probs is NAN during some runs causing prob_action to be 0 / NAN.
             # A little debugging shows that model is probably updating weights in strange ways,
             # so we might need to refine the back prop step. Hacky fix for now is to add 1e-10 to prob_action.
-            loss = -torch.log(prob_action + 1e-10) * total_discounted_reward
+            loss = -torch.log(prob_action + 1e-10) * current_discounted_return
             # print(model_actor.prev_probs)
 
             total_loss += loss # negative loss values are due to negative rewards
-            # TODO: Cross-check discounted reward formula since it directly impacts loss calculation.
-            total_discounted_reward -= reward
 
         # This check is done as sometimes training samples are too few / invalid causing total_loss to be 0
         if (total_loss != 0):
+            optimizer.zero_grad()
             total_loss.backward()
             optimizer.step()
-            optimizer.zero_grad()
 
         if episode % 10 == 0:
-            print(f"Game {episode} finished with total loss = {total_loss}, % of invalid samples = {(invalid_samples / len(training_samples) * 100):.2f}")
+            print(f"Game {episode} finished with total loss = {(total_loss):.2f}, % of invalid samples = {(invalid_samples / len(training_samples) * 100):.2f}")
         
         score[battler.winner] += 1
 
