@@ -40,6 +40,12 @@ class Team:
         self.name = json_val["side"]["name"]
         self.pokemon = [Pokemon(json_poke) for json_poke in json_val["side"]["pokemon"]]
 
+    def calculate_total_HP(self):
+        total_HP = 0
+        for p in self.pokemon:
+            total_HP += p.current_hp
+        return total_HP
+
     def print_short_info(self):
         self.pokemon[0].print_short_info()
         print(
