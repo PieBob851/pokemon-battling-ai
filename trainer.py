@@ -22,7 +22,7 @@ def train(model_actor, random_actor, gamma, num_episodes, optimizer):
             prob_action = None # probability of action chosen by model in current game state
             reward = None # reward received after executing actions in current game state
 
-            original_total_hp_actor_1 = model_actor.team.calculate_total_HP()
+            original_total_hp_model_actor = model_actor.team.calculate_total_HP()
             original_total_hp_actor_2 = battler.actor2.team.calculate_total_HP()
             
             if battler.p1move:
@@ -58,8 +58,8 @@ def train(model_actor, random_actor, gamma, num_episodes, optimizer):
 
             # TODO: Improve reward heuristic
             # Calculate reward based on damage exchanged (considering full teams in case a switch move occurred)
-            damage_dealt = battler.actor2.team.calculate_total_HP() - original_total_hp_actor_2
-            damage_recieved = model_actor.team.calculate_total_HP() - original_total_hp_actor_1
+            damage_dealt = original_total_hp_actor_2 - battler.actor2.team.calculate_total_HP()
+            damage_recieved = original_total_hp_model_actor - model_actor.team.calculate_total_HP()
             reward = max(0.1, damage_dealt - damage_recieved)
             # print(reward)
             
@@ -124,6 +124,9 @@ num_episodes = 100
 model_actor = ModelActor(None)
 random_actor = RandomActor(None)
 optimizer = optim.Adam(model_actor.custom_pokemon_model.parameters(), lr=learning_rate)
+
+total_params = sum(p.numel() for p in model_actor.custom_pokemon_model.parameters() if p.requires_grad)
+print(f"Total trainable params in custom pokemon model: {total_params}")
 
 train(model_actor, random_actor, gamma, num_episodes, optimizer)
 
