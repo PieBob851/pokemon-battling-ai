@@ -39,20 +39,30 @@ class Team:
         self.actor = json_val["side"]["id"]
         self.name = json_val["side"]["name"]
         self.pokemon = [Pokemon(json_poke) for json_poke in json_val["side"]["pokemon"]]
-        # If we are forced to switch or are currently waiting, all moves are inactive
-        if "forceSwitch" in json_val or "wait" in json_val:
-            print("force switch or wait")
-            self.disabled = [True] * 4
-        else:
-            # If a pokemon is trapped, Showdown returns the one move we are allowed to play and the disabled attribute is missing
-            # This is why the default value is being used as False (active move)
-            self.disabled = [move.get("disabled", False) for move in json_val["active"][0]["moves"]]
+        self.invalid_mask = self.create_invalid_mask(json_val)
 
     def calculate_total_HP(self):
         total_HP = 0
         for p in self.pokemon:
             total_HP += p.current_hp
         return total_HP
+
+    def create_invalid_mask(self, json_val):
+        # If we are forced to switch or are currently waiting, all moves are inactive
+        if "forceSwitch" in json_val or "wait" in json_val:
+            invalid_mask = [True] * 4
+        else:
+            # If a pokemon is trapped or toxxed it is limited in its move (sometimes it can only "struggle" or "outrage")
+            # The pokemon's moves list is the same as normal, but the active moves list only shows "struggle", etc.
+            # Need to see if sending "move 1" is still valid
+            invalid_mask = [move.get("disabled", False) for move in json_val["active"][0]["moves"]]
+            if (len(invalid_mask) == 1):
+                invalid_mask += [True] * 8
+                return [int(not a) for a in invalid_mask]
+
+        invalid_mask += [p.current_hp == 0 for p in self.pokemon[1:]]
+        # cast to int for mask to be used later, "true" means disabled; so should be 0 in mask
+        return [int(not a) for a in invalid_mask]
 
     def print_short_info(self):
         self.pokemon[0].print_short_info()

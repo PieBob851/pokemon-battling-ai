@@ -6,6 +6,7 @@ import torch.nn as nn
 EMBEDDING_DIM = 128
 HIDDEN_DIM = 64
 
+
 class CustomPokemonModel(nn.Module):
     def __init__(self):
         super().__init__()
@@ -22,7 +23,7 @@ class CustomPokemonModel(nn.Module):
         )
 
         self.action_fc = nn.Linear(EMBEDDING_DIM, 9)
-    
+
     def forward(self, team, opponent_team):
         abilities = [p.ability for p in team.pokemon] + [p.ability for p in opponent_team.pokemon]
 
@@ -55,4 +56,14 @@ class CustomPokemonModel(nn.Module):
         action_logits = self.action_fc(processed_features)
         action_probs = nn.Softmax(dim=-1)(action_logits)
 
-        return action_probs
+        mask = torch.FloatTensor(team.invalid_mask)
+        if mask.sum() > 0:
+            masked_action_probs = action_probs * mask
+            masked_action_probs = masked_action_probs / masked_action_probs.sum()
+        else:
+            # TODO This seems to happen due to a weird case where we get a request but it's not active, it's "waiting"
+            # I'm thinking we need to handle this case in a better way and wait for the next request from showdown
+            # print('all moves invalid')
+            return action_probs
+
+        return masked_action_probs
