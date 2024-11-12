@@ -39,6 +39,14 @@ class Team:
         self.actor = json_val["side"]["id"]
         self.name = json_val["side"]["name"]
         self.pokemon = [Pokemon(json_poke) for json_poke in json_val["side"]["pokemon"]]
+        # If we are forced to switch or are currently waiting, all moves are inactive
+        if "forceSwitch" in json_val or "wait" in json_val:
+            print("force switch or wait")
+            self.disabled = [True] * 4
+        else:
+            # If a pokemon is trapped, Showdown returns the one move we are allowed to play and the disabled attribute is missing
+            # This is why the default value is being used as False (active move)
+            self.disabled = [move.get("disabled", False) for move in json_val["active"][0]["moves"]]
 
     def calculate_total_HP(self):
         total_HP = 0
@@ -109,6 +117,7 @@ class Battler:
         self.error = False
         while self.current_state != 'await':
             output = self.process.stdout.readline().strip().split('|')
+            # print(output)
             if self.current_state != 'end':
                 self.current_state = Battler.transitions[self.current_state][output[0]]
             else:
