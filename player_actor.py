@@ -22,3 +22,10 @@ class RandomActor(Actor):
 
     def pick_move(self, knowledge) -> str:
         return random.choice(possible_actions)
+
+class DefaultActor(Actor):
+    def __init__(self, team: Team):
+        super().__init__(team)
+
+    def pick_move(self, knowledge) -> str:
+        return "default"
