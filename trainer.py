@@ -118,16 +118,19 @@ def train(model_actor, random_actor, gamma, num_episodes, optimizer):
 
             total_loss = total_loss + loss  # negative loss values are due to negative rewards
 
+        valid_samples = len(training_samples) - invalid_samples
+
         # This check is done as sometimes training samples are too few / invalid causing total_loss to be 0
         if (total_loss != 0 and not torch.isnan(total_loss)):
+            mean_loss = total_loss / valid_samples
             optimizer.zero_grad()
-            total_loss.backward()
+            mean_loss.backward()
             optimizer.step()
         else:
             print("not updating loss due to invalid loss")
 
         if episode % 10 == 0:
-            print(f"Game {episode} finished with total loss = {(total_loss):.2f}, % of invalid samples = {(invalid_samples / len(training_samples) * 100):.2f}")
+            print(f"Game {episode} finished with mean loss = {(mean_loss):.2f}, % of invalid samples = {(invalid_samples / len(training_samples) * 100):.2f}")
         score[battler.winner] += 1
 
     print("Score during traning: ")
