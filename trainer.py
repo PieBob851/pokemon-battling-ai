@@ -1,18 +1,18 @@
 from battler import Battler
 from model.model_actor import ModelActor
-from player_actor import RandomActor
+from player_actor import RandomActor, DefaultActor, PlayerActor
 from utils import simulate_games
 import torch
 import torch.optim as optim
 
-def train(model_actor, random_actor, gamma, num_episodes, optimizer):
+def train(model_actor, random_actor, gamma, num_episodes, optimizer, seed=None):
     score = {'BOT_1': 0, 'BOT_2': 0}
     
     ############## Implementing Policy Gradients (REINFORCE ALGORITHM) below ##############
 
     # Training Loop
     for episode in range(num_episodes):
-        battler = Battler(model_actor, random_actor)
+        battler = Battler(model_actor, random_actor, seed)
         battler.make_moves() # Initial game setup hack so p1move and p2move are not both False
 
         training_samples = [] # store relevant metadata from a single episode / battle
@@ -105,7 +105,7 @@ def train(model_actor, random_actor, gamma, num_episodes, optimizer):
             optimizer.step()
 
         if episode % 10 == 0:
-            print(f"Game {episode} finished with total loss = {(total_loss):.2f}, % of invalid samples = {(invalid_samples / len(training_samples) * 100):.2f}")
+            print(f"Game {episode} finished with total loss = {(total_loss):.2f}, % of invalid samples = {(invalid_samples / len(training_samples) * 100):.2f}, score{score}")
         
         score[battler.winner] += 1
 
@@ -119,18 +119,21 @@ def train(model_actor, random_actor, gamma, num_episodes, optimizer):
 # Hyperparameters
 learning_rate = 0.001
 gamma = 0.99
-num_episodes = 100
+num_episodes = 1000
 
 model_actor = ModelActor(None)
 random_actor = RandomActor(None)
+default_actor = DefaultActor(None)
+player_actor = PlayerActor(None)
 optimizer = optim.Adam(model_actor.custom_pokemon_model.parameters(), lr=learning_rate)
 
 total_params = sum(p.numel() for p in model_actor.custom_pokemon_model.parameters() if p.requires_grad)
 print(f"Total trainable params in custom pokemon model: {total_params}")
 
-train(model_actor, random_actor, gamma, num_episodes, optimizer)
+train(model_actor, default_actor, gamma, num_episodes, optimizer, seed=[5,5,5,5])
 
 ############## Validation ##############
 
 print("\nScore during validation: ")
 simulate_games(model_actor, random_actor, 100)
+simulate_games(model_actor, default_actor, 100)

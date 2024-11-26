@@ -73,7 +73,7 @@ class Battler:
         'end': {'update': 'update', 'sideupdate': 'sideupdate', '': 'end', 'await': 'await', 'end': 'end'}
     }
 
-    def __init__(self, actor1: Actor, actor2: Actor):
+    def __init__(self, actor1: Actor, actor2: Actor, seed=None):
         self.current_state = 'start'
         self.commands = {
             'request': self.request,
@@ -98,8 +98,11 @@ class Battler:
         )
 
         self.winner = None
-
-        self.send_command('>start {"formatid":"gen9randombattle", "p1": {"name":"BOT_1"}, "p2": {"name":"BOT_2"}}')
+        
+        if seed is not None:
+            self.send_command(f'>start {{"formatid":"gen9randombattle", "p1": {{"name":"BOT_1"}}, "p2": {{"name":"BOT_2"}}, "seed": {seed}}}')
+        else:
+            self.send_command(f'>start {{"formatid":"gen9randombattle", "p1": {{"name":"BOT_1"}}, "p2": {{"name":"BOT_2"}}}}')
 
     def send_command(self, command):
         self.process.stdin.write(command + '\n')
@@ -139,6 +142,7 @@ class Battler:
 
     def request(self, output):
         if self.current_state == 'p1':
+            # print(json.dumps(json.loads(output[2]), indent=4))
             self.actor1.team = Team(json.loads(output[2]))
             self.p1move = True
         else:
