@@ -1,30 +1,31 @@
 from battler import Battler
 from model.model_actor import ModelActor
-from player_actor import RandomActor
+from player_actor import RandomActor, DefaultActor
 from utils import simulate_games
 import torch
 import torch.optim as optim
 
+
 def train(model_actor, random_actor, gamma, num_episodes, optimizer):
     score = {'BOT_1': 0, 'BOT_2': 0}
-    
+    # max_possible_reward = 600  # sort of a loose estimate, can adjust if we want to try normalizing rewards
     ############## Implementing Policy Gradients (REINFORCE ALGORITHM) below ##############
 
     # Training Loop
     for episode in range(num_episodes):
         battler = Battler(model_actor, random_actor)
-        battler.make_moves() # Initial game setup hack so p1move and p2move are not both False
+        battler.make_moves()  # Initial game setup hack so p1move and p2move are not both False
 
-        training_samples = [] # store relevant metadata from a single episode / battle
+        training_samples = []  # store relevant metadata from a single episode / battle
 
         ############## PLAY AN ENTIRE EPISODE / BATTLE AND RECORD EACH INTERACTION ##############
         while battler.current_state != 'end':
-            prob_action = None # probability of action chosen by model in current game state
-            reward = None # reward received after executing actions in current game state
+            prob_action = None  # probability of action chosen by model in current game state
+            reward = None  # reward received after executing actions in current game state
 
             original_total_hp_model_actor = model_actor.team.calculate_total_HP()
             original_total_hp_actor_2 = battler.actor2.team.calculate_total_HP()
-            
+
             if battler.p1move:
                 knowledge = {"field": None, "opponent": battler.actor2.team, "error": battler.error}
                 action = model_actor.pick_move(knowledge)
@@ -53,21 +54,40 @@ def train(model_actor, random_actor, gamma, num_episodes, optimizer):
                 # print(move)
                 battler.send_command(move)
                 battler.p2move = False
-            
+
             battler.receive_output()
 
             # TODO: Improve reward heuristic
             # Calculate reward based on damage exchanged (considering full teams in case a switch move occurred)
-            damage_dealt = original_total_hp_actor_2 - battler.actor2.team.calculate_total_HP()
-            damage_recieved = original_total_hp_model_actor - model_actor.team.calculate_total_HP()
-            reward = max(0.1, damage_dealt - damage_recieved)
+            win = 0
+            if battler.current_state == 'end':
+                win = 100 if battler.winner == 'BOT_1' else -100
+            damage_dealt = (original_total_hp_actor_2 -
+                            battler.actor2.team.calculate_total_HP())
+            damage_received = (original_total_hp_model_actor -
+                               model_actor.team.calculate_total_HP())
+
+            opponent_ko = original_total_hp_actor_2 > 0 and battler.actor2.team.active_fainted()
+            self_ko = original_total_hp_model_actor > 0 and model_actor.team.active_fainted()
+
+            win_weight = min(1.0, episode / 500)  # Scale win reward over first 500 episodes
+            damage_weight = max(.01, 1.0 - win_weight)
+
+            reward = (
+                damage_weight * ((damage_dealt - damage_received)  # Immediate reward
+                                 + (50 if opponent_ko else 0)  # Reward for KO
+                                 - (50 if self_ko else 0))  # Penalty for losing a Pokémon
+                + win_weight * win
+            )
+            # Normalize reward? In practice it doesn't seem to improve results or help convergence
+            # reward = max(-1, min(1, reward / max_possible_reward))
             # print(reward)
-            
+
             # Save each sample of observed experience as training data
             training_samples.append((prob_action, reward))
-        
+
         ############## USE PREVIOUS BATTLE EXPERIENCES TO TUNE NETWORK WEIGHTS ##############
-        
+
         # Compute discounted returns using gamma
         # TODO: Cross-check discounted returns formula since it directly impacts loss calculation. Normalize rewards?
         discounted_returns = []
@@ -85,28 +105,29 @@ def train(model_actor, random_actor, gamma, num_episodes, optimizer):
             prob_action, _ = sample
             current_discounted_return = discounted_returns[i]
             # TODO: Can we somehow reduce # of invalid samples generated during battle?
-            # prob_action is None when it is not p1's move so maybe it is okay to ignore these cases? 
+            # prob_action is None when it is not p1's move so maybe it is okay to ignore these cases?
             # It is interesting that this number fluctuates greatly though!
             if (prob_action is None):
                 invalid_samples += 1
                 continue
 
-            # Important Observations: 
+            # Important Observations:
             # (1) High loss values could mean prob_action is close to 0 often (poor model convergence?)
             # (2) Hacky fix for now is to add 1e-10 to prob_action to avoid taking log of 0.
             loss = -torch.log(prob_action + 1e-10) * current_discounted_return
 
-            total_loss += loss # negative loss values are due to negative rewards
+            total_loss = total_loss + loss  # negative loss values are due to negative rewards
 
         # This check is done as sometimes training samples are too few / invalid causing total_loss to be 0
-        if (total_loss != 0):
+        if (total_loss != 0 and not torch.isnan(total_loss)):
             optimizer.zero_grad()
             total_loss.backward()
             optimizer.step()
+        else:
+            print("not updating loss due to invalid loss")
 
         if episode % 10 == 0:
             print(f"Game {episode} finished with total loss = {(total_loss):.2f}, % of invalid samples = {(invalid_samples / len(training_samples) * 100):.2f}")
-        
         score[battler.winner] += 1
 
     print("Score during traning: ")
@@ -116,13 +137,15 @@ def train(model_actor, random_actor, gamma, num_episodes, optimizer):
 
 ############## Training ##############
 
+
 # Hyperparameters
 learning_rate = 0.001
 gamma = 0.99
-num_episodes = 100
+num_episodes = 1000
+comments = "random, lstm, masking used"
 
 model_actor = ModelActor(None)
-random_actor = RandomActor(None)
+random_actor = DefaultActor(None)
 optimizer = optim.Adam(model_actor.custom_pokemon_model.parameters(), lr=learning_rate)
 
 total_params = sum(p.numel() for p in model_actor.custom_pokemon_model.parameters() if p.requires_grad)
@@ -134,3 +157,5 @@ train(model_actor, random_actor, gamma, num_episodes, optimizer)
 
 print("\nScore during validation: ")
 simulate_games(model_actor, random_actor, 100)
+# useful for comparing when running simultaneous training sims
+print(f"learning rate: {learning_rate} \n gamma: {gamma} \n num episodes: {num_episodes} \n comments: {comments}")

@@ -10,6 +10,7 @@ class ModelActor(Actor):
         self.prev_probs = None
         self.prev_probs_sorted = None
         self.errors = 0
+        self.hidden_states = None
 
     def pick_move(self, knowledge) -> str:
         # knowledge['opponent'].print_short_info()
@@ -32,7 +33,8 @@ class ModelActor(Actor):
         # once we stop erroring we can reset the error index to 0
         self.errors = 0
 
-        action_probs = self.custom_pokemon_model.forward(self.team, knowledge['opponent'])
+        action_probs, self.hidden_states = self.custom_pokemon_model.forward(
+            self.team, knowledge['opponent'], self.hidden_states)
 
         # The output is 9 numbers which we're taking to represent the probability of choosing an action
         # indices 0-3 represent moves 1-4 of the active pokemon
