@@ -39,12 +39,35 @@ class Team:
         self.actor = json_val["side"]["id"]
         self.name = json_val["side"]["name"]
         self.pokemon = [Pokemon(json_poke) for json_poke in json_val["side"]["pokemon"]]
+        self.invalid_mask = self.create_invalid_mask(json_val)
 
     def calculate_total_HP(self):
         total_HP = 0
         for p in self.pokemon:
             total_HP += p.current_hp
         return total_HP
+
+    def active_fainted(self):
+        return self.pokemon[0].current_hp == 0
+
+    def create_invalid_mask(self, json_val):
+        # If we are forced to switch, all moves are inactive
+        if "forceSwitch" in json_val:
+            invalid_mask = [True] * 4
+        else:
+            # If a pokemon is trapped or toxxed it is limited in its move (sometimes it can only "struggle" or "outrage")
+            # The pokemon's moves list is the same as normal, but the active moves list only shows "struggle", etc.
+            # Need to see if sending "move 1" is still valid
+            invalid_mask = [move.get("disabled", False) for move in json_val["active"][0]["moves"]]
+            if (len(invalid_mask) == 1):
+                invalid_mask += [True] * 8
+                return [int(not a) for a in invalid_mask]
+
+        invalid_mask += [p.current_hp == 0 for p in self.pokemon[1:]]
+        # cast to int for mask to be used later, "true" means disabled; so should be 0 in mask
+        # if (all(invalid_mask)):
+        #     print(json_val)
+        return [int(not a) for a in invalid_mask]
 
     def print_short_info(self):
         self.pokemon[0].print_short_info()
@@ -109,6 +132,7 @@ class Battler:
         self.error = False
         while self.current_state != 'await':
             output = self.process.stdout.readline().strip().split('|')
+            # print(output)
             if self.current_state != 'end':
                 self.current_state = Battler.transitions[self.current_state][output[0]]
             else:
@@ -138,11 +162,16 @@ class Battler:
     # functions for commands
 
     def request(self, output):
+        team_info = json.loads(output[2])
+        # Some requests include a "wait" in them rather than "active" or "forceSwitch"
+        # Sample AI on showdown repo handles these by doing nothing
+        if ('wait' in team_info):
+            return
         if self.current_state == 'p1':
-            self.actor1.team = Team(json.loads(output[2]))
+            self.actor1.team = Team(team_info)
             self.p1move = True
         else:
-            self.actor2.team = Team(json.loads(output[2]))
+            self.actor2.team = Team(team_info)
             self.p2move = True
 
     def turn(self, output):
