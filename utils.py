@@ -1,12 +1,12 @@
 from battler import Battler
-from model.model_actor import ModelActor
-from player_actor import RandomActor
+# from model.model_actor import ModelActor
+# from player_actor import RandomActor
 
-def simulate_games(actor1, actor2, n=100):
+def simulate_games(actor1, actor2, n=100, seed=None):
     score = {'BOT_1': 0, 'BOT_2': 0}
 
     for i in range(n):
-        battler = Battler(actor1, actor2)
+        battler = Battler(actor1, actor2, seed)
 
         iteration = 0
         while battler.current_state != 'end':
