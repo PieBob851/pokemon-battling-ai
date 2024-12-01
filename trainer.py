@@ -5,6 +5,7 @@ from utils import simulate_games
 import torch
 import torch.optim as optim
 
+
 def train(model_actor, random_actor, gamma, num_episodes, optimizer, seed=None):
     score = {'BOT_1': 0, 'BOT_2': 0}
     # max_possible_reward = 600  # sort of a loose estimate, can adjust if we want to try normalizing rewards
@@ -13,7 +14,7 @@ def train(model_actor, random_actor, gamma, num_episodes, optimizer, seed=None):
     # Training Loop
     for episode in range(num_episodes):
         battler = Battler(model_actor, random_actor, seed)
-        battler.make_moves() # Initial game setup hack so p1move and p2move are not both False
+        battler.make_moves()  # Initial game setup hack so p1move and p2move are not both False
 
         training_samples = []  # store relevant metadata from a single episode / battle
 
@@ -141,22 +142,22 @@ def train(model_actor, random_actor, gamma, num_episodes, optimizer, seed=None):
 
 
 # Hyperparameters
-learning_rate = 0.001
-gamma = 0.99
-num_episodes = 1000
+learning_rate = 0.0005
+gamma = 0.995
+num_episodes = 3000
 
-model_actor = ModelActor(None, model="CustomPokemonModelB")
+model_actor = ModelActor(None)
 random_actor = RandomActor(None)
 default_actor = DefaultActor(None)
 player_actor = PlayerActor(None)
-comments = "random, lstm, masking used"
+comments = "default, type embed with DR"
 
 optimizer = optim.Adam(model_actor.custom_pokemon_model.parameters(), lr=learning_rate)
 
 total_params = sum(p.numel() for p in model_actor.custom_pokemon_model.parameters() if p.requires_grad)
 print(f"Total trainable params in custom pokemon model: {total_params}")
 
-train(model_actor, default_actor, gamma, num_episodes, optimizer, seed=[5,5,5,5])
+train(model_actor, default_actor, gamma, num_episodes, optimizer, seed=[5, 5, 5, 5])
 
 ############## Validation ##############
 
