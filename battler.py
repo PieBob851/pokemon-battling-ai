@@ -9,7 +9,7 @@ start_battle_path = "."
 
 class Pokemon:
     def __init__(self, json):
-        self.name = json['details']
+        self.name = json['ident'][4:]
         match = re.match(r'(\d+)(?:/(\d+))?', json["condition"])
         self.stats = [int(match.group(2)) if match.group(2) is not None else 0, json["stats"]["atk"],
                       json["stats"]["def"], json["stats"]["spa"], json["stats"]["spd"], json["stats"]["spe"]]
@@ -135,7 +135,7 @@ class Battler:
         self.error = False
         while self.current_state != 'await':
             output = self.process.stdout.readline().strip().split('|')
-            # print(output)
+            #print(output)
             if self.current_state != 'end':
                 self.current_state = Battler.transitions[self.current_state][output[0]]
             else:
