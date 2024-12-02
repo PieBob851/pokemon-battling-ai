@@ -145,7 +145,7 @@ learning_rate = 0.001
 gamma = 0.99
 num_episodes = 1000
 
-model_actor = ModelActor(None)
+model_actor = ModelActor(None, model="CustomPokemonModelB")
 random_actor = RandomActor(None)
 default_actor = DefaultActor(None)
 player_actor = PlayerActor(None)

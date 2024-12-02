@@ -1,12 +1,17 @@
 from battler import Actor, Team
 from model.custom_pokemon_model import CustomPokemonModel
+from model.custom_pokemon_model_b import CustomPokemonModelB
 import torch
 
 class ModelActor(Actor):
-    def __init__(self, team: Team):
+    def __init__(self, team: Team, model="CustomPokemonModel"):
         super().__init__(team)
-
-        self.custom_pokemon_model = CustomPokemonModel()
+        
+        self.model = model
+        if self.model == "CustomPokemonModel":
+            self.custom_pokemon_model = CustomPokemonModel()
+        else:
+            self.custom_pokemon_model = CustomPokemonModelB()
         self.prev_probs = None
         self.prev_probs_sorted = None
         self.errors = 0
@@ -32,9 +37,12 @@ class ModelActor(Actor):
                 return f'switch {choice - 2}'
         # once we stop erroring we can reset the error index to 0
         self.errors = 0
-
-        action_probs, self.hidden_states = self.custom_pokemon_model.forward(
-            self.team, knowledge['opponent'], self.hidden_states)
+        
+        if self.model == "CustomPokemonModel":
+            action_probs, self.hidden_states = self.custom_pokemon_model.forward(
+                self.team, knowledge['opponent'], self.hidden_states)
+        else:
+            action_probs = self.custom_pokemon_model.forward(self.team, knowledge['opponent'])
 
         # The output is 9 numbers which we're taking to represent the probability of choosing an action
         # indices 0-3 represent moves 1-4 of the active pokemon
